@@ -192,7 +192,7 @@ function Graph({ graph, width = 800, height = 800 }) {
           Object.entries(state.states).forEach(([id, el]) => {
             if (Math.random() > 0.9) {
               el.state.selected = true;
-              state.states[id].selected = true;
+              state.selected[id] = true;
             }
           });
         }
