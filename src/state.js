@@ -3,7 +3,7 @@ import { useReducer } from "react";
 export function useCompositeState(args) {
   const red = (state, action) => {
     //return (state) => ({ ...state, ...action.payload });
-    return { ...state, ...action.payload };
+    return { ...state, ...action.payload(state) };
   };
 
   const [state, dispatch] = useReducer(red, { ...args });
@@ -17,7 +17,11 @@ export function useCompositeState(args) {
       }
     },
     set: (obj, key, value) => {
-      dispatch({ payload: { [key]: value } });
+      if (typeof value === "function") {
+        dispatch({ payload: (state) => ({ [key]: value(state) }) });
+      } else {
+        dispatch({ payload: () => ({ [key]: value }) });
+      }
       return true;
     },
   });

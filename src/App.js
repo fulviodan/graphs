@@ -2,7 +2,7 @@ import logo from "./logo.svg";
 import "./App.css";
 import { ChakraProvider } from "@chakra-ui/react";
 
-import { motion } from "framer-motion";
+import { motion, useDragControls, useMotionValue } from "framer-motion";
 import { useCompositeState } from "./state";
 import { useEffect } from "react";
 
@@ -16,7 +16,12 @@ class Observer {
     }
     this.observers[id][observerId] = cb;
   }
-  notify(id, msg) {
+  remove(id, observerId) {
+    if (this.observers[id] != null) {
+      delete this.observers[id][observerId];
+    }
+  }
+  async notify(id, msg) {
     const observers = this.observers[id] != null ? this.observers[id] : {};
     Object.values(observers).forEach((el) => {
       el(msg);
@@ -25,35 +30,87 @@ class Observer {
 }
 const o = new Observer();
 
-export function Node({ id, x, y, r = 50 }) {
-  const state = useCompositeState({ x, y });
+export function Node({ id, x, y, r = 50, selected = false }) {
+  const state = useCompositeState({
+    selected: false,
+    delta: null,
+    dragging: false,
+  });
+  const mx = useMotionValue(x);
+  const my = useMotionValue(y);
+
   useEffect(() => {
     o.notify(id, { x, y });
   }, [x, y]);
 
+  useEffect(() => {
+    return mx.onChange((latest) => {
+      o.notify(id, { x: latest, y: my.get() });
+      if (state.dragging && state.delta) {
+        o.notify("move", { sid: id, delta: state.delta });
+      }
+    });
+  }, [mx, state.dragging, state.delta]);
+
+  useEffect(() => {
+    return my.onChange((latest) => {
+      o.notify(id, { x: mx.get(), y: latest });
+      if (state.dragging && state.last != null) {
+        console.log("Notifico delta", state.delta);
+        o.notify("move", { sid: id, delta: state.delta });
+      }
+    });
+  }, [my, state.last, state.dragging]);
+
+  useEffect(() => {
+    if (state.selected) {
+      o.add("move", id, ({ sid, delta }) => {
+        console.log({ sid, delta });
+        if (sid !== id) {
+          const { x, y } = delta;
+          mx.set(mx.get() + x);
+          my.set(my.get() + y);
+        }
+      });
+    } else {
+      o.remove("move", id);
+    }
+  }, [state.selected, mx, my]);
+
   return (
     <motion.rect
-      drag={true}
+      drag
       dragMomentum={false}
+      onDragStart={(e) => {
+        state.dragging = true;
+        console.log(e);
+      }}
+      onDragEnd={(e) => {
+        state.dragging = false;
+        state.delta = null;
+      }}
       onDrag={(event, info) => {
         const { x, y } = info.delta;
-        state.x = state.x + x;
-        state.y = state.y + y;
-
-        o.notify(id, { x: state.x + x, y: state.y + y, delta: info.delta });
+        if (x !== 0 || y !== 0) {
+          state.delta = { x: info.delta.x, y: info.delta.y };
+        } else {
+          console.log("L'inguaggcchcio");
+          state.delta = null;
+        }
       }}
-      x={x}
-      y={y}
+      style={{ x: mx, y: my }}
       width={90}
       height={60}
-      fill="red"
+      fill={state.selected ? "yellow" : "red"}
+      onClick={(e) => {
+        state.selected = !state.selected;
+      }}
     />
   );
 }
 
 function Edge({ id, start, end }) {
   const state = useCompositeState({ x: 0, y: 0, ex: 0, ey: 0 });
-  console.log("Rerender", id, start, end);
   o.add(start, id, ({ x, y }) => {
     state.x = x;
     state.y = y;
@@ -73,10 +130,11 @@ function Edge({ id, start, end }) {
 }
 
 function App() {
-  const width = 1920;
-  const height = 1080;
+  const width = 1320;
+  const height = 800;
   const nodes = [];
-  const nn = 20;
+  const nn = 4;
+
   for (let i = 0; i < nn; i++) {
     nodes.push(
       <Node
@@ -88,12 +146,12 @@ function App() {
     );
   }
   const edges = [];
-  for (let i = 0; i < nn * 3; i++) {
+  for (let i = 0; i < nn - 1; i++) {
     edges.push(
       <Edge
         id={i}
-        start={Math.floor(Math.random() * nn)}
-        end={Math.floor(Math.random() * nn)}
+        start={Math.floor(Math.random() * (nn - 1))}
+        end={Math.floor(Math.random() * (nn - 1))}
       />
     );
   }
@@ -102,6 +160,24 @@ function App() {
       {edges}
       {nodes}
     </svg>
+  );
+}
+
+function App2() {
+  const x = useMotionValue(0);
+
+  useEffect(() => {
+    x.onChange((latest) => {
+      console.log(latest);
+    });
+  }, [x]);
+
+  return (
+    <>
+      <motion.div drag dragMomentum={false} style={{ x }}>
+        draggami
+      </motion.div>
+    </>
   );
 }
 
